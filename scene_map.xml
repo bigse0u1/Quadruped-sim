@@ -1,53 +1,78 @@
-<mujoco model="spot map scene">
+<mujoco model="spot 50x50 empty map">
   <include file="robots/boston_dynamics_spot/spot_arm.xml"/>
 
   <compiler meshdir="robots/boston_dynamics_spot/assets"/>
 
-  <statistic center="5 0 0.5" extent="12" meansize="0.05"/>
+  <statistic center="0 0 0.5" extent="30" meansize="0.05"/>
 
   <visual>
-    <headlight diffuse="0.6 0.6 0.6" ambient="0.3 0.3 0.3" specular="0 0 0"/>
+    <headlight diffuse="0.6 0.6 0.6" ambient="0.4 0.4 0.4" specular="0 0 0"/>
     <rgba haze="0.15 0.25 0.35 1"/>
-    <global azimuth="220" elevation="-10"/>
+    <global azimuth="220" elevation="-20"/>
     <quality shadowsize="8192"/>
   </visual>
 
   <asset>
-    <texture type="skybox" builtin="gradient" rgb1="0.3 0.5 0.7" rgb2="0 0 0" width="512" height="3072"/>
-    <texture type="2d" name="groundplane" builtin="checker" mark="edge"
-      rgb1="0.25 0.35 0.25" rgb2="0.15 0.2 0.15" markrgb="0.8 0.8 0.8" width="300" height="300"/>
-    <material name="groundplane" texture="groundplane" texuniform="true" texrepeat="8 8" reflectance="0.1"/>
-    <material name="wall"     rgba="0.75 0.75 0.7 1"/>
-    <material name="obstacle" rgba="0.85 0.45 0.2 1"/>
-    <material name="ramp"     rgba="0.5  0.7  0.5 1"/>
-    <material name="platform" rgba="0.4  0.55 0.7 1"/>
-    <material name="step"     rgba="0.6  0.6  0.55 1"/>
+    <!-- 하늘 배경 -->
+    <texture 
+      type="skybox" 
+      builtin="gradient" 
+      rgb1="0.3 0.5 0.7" 
+      rgb2="0 0 0" 
+      width="512" 
+      height="3072"/>
+
+    <!-- 흰색 바닥 -->
+    <material name="white_floor" rgba="1 1 1 1"/>
+
+    <!-- 벽 재질 -->
+    <material name="wall" rgba="0.75 0.75 0.7 1"/>
   </asset>
 
   <worldbody>
-    <!-- 바닥 -->
-    <geom name="floor" size="0 0 0.05" type="plane" material="groundplane"/>
+    <!-- 
+      50m x 50m 흰색 바닥
+      중심: (0, 0)
+      x 범위: -25 ~ 25
+      y 범위: -25 ~ 25
+    -->
+    <geom 
+      name="floor" 
+      type="box" 
+      size="25 25 0.025" 
+      pos="0 0 -0.025" 
+      material="white_floor"/>
 
-    <!-- ── 복도 벽 (x축 방향 통로, 너비 3m) ── -->
-    <geom name="wall_left"  type="box" size="12 0.15 0.8" pos="6 -1.5 0.8" material="wall"/>
-    <geom name="wall_right" type="box" size="12 0.15 0.8" pos="6  1.5 0.8" material="wall"/>
-    <geom name="wall_end"   type="box" size="0.15 1.5 0.8" pos="18.15 0 0.8" material="wall"/>
+    <!-- 위쪽 벽: y = 25 -->
+    <geom 
+      name="wall_y_pos" 
+      type="box" 
+      size="25 0.1 0.75" 
+      pos="0 25 0.75" 
+      material="wall"/>
 
+    <!-- 아래쪽 벽: y = -25 -->
+    <geom 
+      name="wall_y_neg" 
+      type="box" 
+      size="25 0.1 0.75" 
+      pos="0 -25 0.75" 
+      material="wall"/>
 
+    <!-- 오른쪽 벽: x = 25 -->
+    <geom 
+      name="wall_x_pos" 
+      type="box" 
+      size="0.1 25 0.75" 
+      pos="25 0 0.75" 
+      material="wall"/>
 
-    <!-- ── 구간 2: 계단 3단 (x=7~9) ── -->
-    <geom name="step1" type="box" size="0.4 1.35 0.05" pos="7.4 0 0.05" material="step"/>
-    <geom name="step2" type="box" size="0.4 1.35 0.05" pos="8.2 0 0.15" material="step"/>
-    <geom name="step3" type="box" size="0.4 1.35 0.05" pos="9.0 0 0.25" material="step"/>
-
-    <!-- ── 구간 3: 경사로 (x=11~14, 약 7.5도 경사) ── -->
-    <geom name="ramp" type="box" size="1.5 1.35 0.05"
-          pos="12.5 0 0.2" euler="0 0.131 0" material="ramp"/>
-
-    <!-- 경사로 위 플랫폼 -->
-    <geom name="platform" type="box" size="2.0 1.35 0.05" pos="16 0 0.42" material="platform"/>
-
-    <!-- 목표 지점 표시 (노란 박스) -->
-    <geom name="goal" type="box" size="0.2 0.2 0.2" pos="17 0 0.62" rgba="1 0.9 0 1"/>
+    <!-- 왼쪽 벽: x = -25 -->
+    <geom 
+      name="wall_x_neg" 
+      type="box" 
+      size="0.1 25 0.75" 
+      pos="-25 0 0.75" 
+      material="wall"/>
   </worldbody>
 </mujoco>
