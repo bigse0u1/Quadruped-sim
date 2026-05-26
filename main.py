@@ -1,12 +1,3 @@
-"""
-Spot Arm — 단순 Trot 컨트롤러 (클린 재작성)
-============================================
-- 복잡한 레이어 전부 제거
-- 순수 phase 기반 trot + IK
-- stance 필터 없음 (추진력 최우선)
-- swing만 약한 필터
-"""
-
 import time, math, enum
 import numpy as np
 import mujoco, mujoco.viewer
