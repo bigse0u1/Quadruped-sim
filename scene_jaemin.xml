@@ -1,0 +1,75 @@
+<mujoco model="spot map with obstacles and target (jaemin)">
+  <include file="robots/boston_dynamics_spot/spot_arm.xml"/>
+
+  <compiler meshdir="robots/boston_dynamics_spot/assets"/>
+
+  <statistic center="0 0 0.5" extent="20" meansize="0.05"/>
+
+  <visual>
+    <headlight diffuse="0.6 0.6 0.6" ambient="0.4 0.4 0.4" specular="0 0 0"/>
+    <rgba haze="0.15 0.25 0.35 1"/>
+    <global azimuth="220" elevation="-20"/>
+    <quality shadowsize="8192"/>
+  </visual>
+
+  <asset>
+    <texture
+      type="skybox"
+      builtin="gradient"
+      rgb1="0.3 0.5 0.7"
+      rgb2="0 0 0"
+      width="512"
+      height="3072"/>
+
+    <material name="white_floor" rgba="1 1 1 1"/>
+    <material name="wall"        rgba="0.75 0.75 0.7 1"/>
+    <material name="obstacle"    rgba="0.45 0.45 0.55 1"/>
+    <material name="target_red"  rgba="0.9 0.15 0.15 1"/>
+    <material name="goal_mark"   rgba="0.1 0.8 0.2 0.4"/>
+  </asset>
+
+  <worldbody>
+    <!-- 20m x 20m 흰색 바닥, 중심 (0,0), x,y 범위 -10~10 -->
+    <geom name="floor"
+          type="box"
+          size="10 10 0.025"
+          pos="0 0 -0.025"
+          material="white_floor"/>
+
+    <!-- 외벽 4개 -->
+    <geom name="wall_y_pos" type="box" size="10 0.1 0.75" pos="0  10 0.75" material="wall"/>
+    <geom name="wall_y_neg" type="box" size="10 0.1 0.75" pos="0 -10 0.75" material="wall"/>
+    <geom name="wall_x_pos" type="box" size="0.1 10 0.75" pos=" 10 0 0.75" material="wall"/>
+    <geom name="wall_x_neg" type="box" size="0.1 10 0.75" pos="-10 0 0.75" material="wall"/>
+
+    <!-- 장애물 박스들 (grid cell 사이즈 1m 기준) -->
+    <!-- 코드의 OBSTACLES 배열과 일치시킬 것 -->
+    <geom name="obs_1" type="box" size="0.5 1.5 0.5" pos=" 1.5  0.5 0.5" material="obstacle"/>
+    <geom name="obs_2" type="box" size="1.5 0.5 0.5" pos="-1.5 -2.5 0.5" material="obstacle"/>
+    <geom name="obs_3" type="box" size="0.5 1.5 0.5" pos=" 3.5 -2.5 0.5" material="obstacle"/>
+    <geom name="obs_4" type="box" size="1.0 0.5 0.5" pos="-3.0  2.5 0.5" material="obstacle"/>
+    <geom name="obs_5" type="box" size="0.5 0.5 0.5" pos=" 0.5 -4.5 0.5" material="obstacle"/>
+
+    <!-- 목표 지점 시각화 (반투명 녹색 디스크) -->
+    <geom name="goal_marker"
+          type="cylinder"
+          size="0.4 0.005"
+          pos="5.5 3.5 0.005"
+          material="goal_mark"
+          contype="0" conaffinity="0"/>
+
+    <!-- 잡을 빨간 큐브 (free joint 으로 동역학 적용) -->
+    <body name="target_cube" pos="5.5 3.5 0.05">
+      <freejoint name="target_free"/>
+      <inertial pos="0 0 0" mass="0.05" diaginertia="0.0001 0.0001 0.0001"/>
+      <geom name="target_cube_geom"
+            type="box"
+            size="0.04 0.04 0.04"
+            material="target_red"
+            friction="1.2 0.05 0.001"
+            condim="6"
+            priority="2"
+            solimp="0.95 0.99 0.001"/>
+    </body>
+  </worldbody>
+</mujoco>
