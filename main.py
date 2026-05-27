@@ -183,6 +183,13 @@ with mujoco.viewer.launch_passive(model, data) as viewer:
     print(f"[안정화 완료] z={bz:.4f}")
     viewer.sync()
 
+    # 3인칭 추적 카메라
+    viewer.cam.type = mujoco.mjtCamera.mjCAMERA_TRACKING
+    viewer.cam.trackbodyid = model.body("body").id
+    viewer.cam.distance = 5.0
+    viewer.cam.azimuth = 180.0
+    viewer.cam.elevation = -20.0
+
     dt      = model.opt.timestep
     t       = 0.0
     step_i  = 0
