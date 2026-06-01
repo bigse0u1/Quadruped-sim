@@ -1,7 +1,7 @@
 <mujoco model="spot 50x50 custom map">
-  <include file="robots/boston_dynamics_spot/spot_arm.xml"/>
+  <include file="../robots/boston_dynamics_spot/spot_arm.xml"/>
 
-  <compiler meshdir="robots/boston_dynamics_spot/assets"/>
+  <compiler meshdir="../robots/boston_dynamics_spot/assets"/>
 
   <statistic center="0 0 0.5" extent="30" meansize="0.05"/>
 
