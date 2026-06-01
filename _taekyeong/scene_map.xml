@@ -87,9 +87,9 @@
          도로 (기존 물 대신)
          y = 5 부근 가로 도로
          ========================= -->
-    <geom name="road_main_left"   type="box" size="10 2.5 0.01" pos="-15 5 0.01" material="road"/>
-    <geom name="road_main_mid"    type="box" size="8 2.5 0.01"  pos="0 5 0.01"   material="road"/>
-    <geom name="road_main_right"  type="box" size="10 2.5 0.01" pos="15 5 0.01"  material="road"/>
+    <geom name="road_main_left"   type="box" size="10 2.5 0.01" pos="-15 5 0.01" material="road" contype="0" conaffinity="0"/>
+    <geom name="road_main_mid"    type="box" size="8 2.5 0.01"  pos="0 5 0.01"   material="road" contype="0" conaffinity="0"/>
+    <geom name="road_main_right"  type="box" size="10 2.5 0.01" pos="15 5 0.01"  material="road" contype="0" conaffinity="0"/>
 
     <!-- 중앙선 -->
     <geom name="lane_mark_01" type="box" size="4 0.08 0.012" pos="-20 5 0.012" material="lane_mark" contype="0" conaffinity="0"/>

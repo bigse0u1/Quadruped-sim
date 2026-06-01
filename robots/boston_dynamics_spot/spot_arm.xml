@@ -90,6 +90,7 @@
     <body name="body" childclass="spot" pos="0 -19 .75">
       <light name="tracking" mode="trackcom" pos="0 0 2"/>
       <freejoint name="freejoint"/>
+      <camera name="body_cam" pos="0.4 0 -0.1" xyaxes="0 -1 0 0 0 1" fovy="90"/>
       <inertial pos="0.0063944 -9.81216e-05 0.000911379" mass="32.86" diaginertia="0.13144 0.13144 0.13144"/>
       <geom mesh="body_0" material="BlackAbs" class="visual"/>
       <geom mesh="body_1" material="wrap" class="visual"/>
@@ -228,6 +229,7 @@
                     <geom class="collision" mesh="middle_jaw_coll"/>
                     <geom class="collision" mesh="jaw_tooth_coll"/>
                     <body name="arm_link_fngr" pos="0.11745 0 0.01482">
+                      <camera name="arm_cam" pos="0.12 0 0" xyaxes="0 -1 0 0 0 1" fovy="90"/>
                       <inertial pos="0.0478787 -0.000206768 -0.0162879" quat="0 1 0 1" mass="0.2"
                         diaginertia="0.000391278 0.000300713 0.000143996"/>
                       <joint name="arm_f1x" axis="0 1 0" range="-1.57 0"/>
