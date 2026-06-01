@@ -1,12 +1,12 @@
-import time, math, enum
+import time, math
 import numpy as np
 import mujoco, mujoco.viewer
 from multiprocessing import Process, Queue as MPQueue
 import _cam_worker
+import traffic
+import cars
 
-# ──────────────────────────────────────────────────────────────
-#  순수 상수 (model 불필요)
-# ──────────────────────────────────────────────────────────────
+# ── 보행 상수 ─────────────────────────────────────────────────
 L1x=0.025; L1z=0.32; L2=0.3365
 HY_MIN,HY_MAX = -0.898845, 2.29511
 KN_MIN,KN_MAX = -2.7929,  -0.2544
@@ -19,37 +19,11 @@ CMD_VX       = 0.8
 CMD_VYAW     = 0.0
 SWING_FILTER = 0.55
 
-CAR_SPEED = 6.0
-CAR_KP    = 80.0
-CAR_BOUND = 24.0
-
-TRAFFIC_CYCLE  = 10.0
-GREEN_DURATION =  5.0
-
-_CW_XS    = [-15.0, 0.0, 15.0]
-_CW_X_R   = 1.5
-_CW_Y_IN  = 3.0
-_CW_Y_OUT = 7.5
-
-_last_tl           = None
-_crosswalk_waiting = False
-
-# ──────────────────────────────────────────────────────────────
-#  유틸 / 기구학 함수
-# ──────────────────────────────────────────────────────────────
+# ── 유틸 함수 ─────────────────────────────────────────────────
 def get_act(name):
     aid = mujoco.mj_name2id(model, mujoco.mjtObj.mjOBJ_ACTUATOR, name)
     if aid == -1: raise ValueError(f"Actuator not found: {name}")
     return aid
-
-def get_jnt(name):
-    jid = mujoco.mj_name2id(model, mujoco.mjtObj.mjOBJ_JOINT, name)
-    return model.jnt_qposadr[jid], model.jnt_dofadr[jid]
-
-def get_geom(name):
-    gid = mujoco.mj_name2id(model, mujoco.mjtObj.mjOBJ_GEOM, name)
-    if gid == -1: raise ValueError(f"Geom not found: {name}")
-    return gid
 
 def find_free_qpos():
     for j in range(model.njnt):
@@ -66,6 +40,7 @@ def quat_to_rpy(q):
 
 def clamp(v, lo, hi): return float(np.clip(v, lo, hi))
 
+# ── 기구학 ────────────────────────────────────────────────────
 def fk(hy, kn):
     c1,s1   = math.cos(hy),  math.sin(hy)
     c12,s12 = math.cos(hy+kn), math.sin(hy+kn)
@@ -88,59 +63,17 @@ def ik(fx_t, fz_t, hy=HY_HOME, kn=KN_HOME):
 
 FX0, FZ0 = fk(HY_HOME, KN_HOME)
 
+# ── 보행 제어 ─────────────────────────────────────────────────
 def foot_traj(phase, vx, vyaw, hip_y):
     stride = vx / FREQ
-    yaw_d  = vyaw / FREQ * hip_y
-    S      = stride + yaw_d
+    S      = stride + vyaw / FREQ * hip_y
     half   = S / 2.0
     if phase < DUTY:
         t  = phase / DUTY
-        dx = half - S * t
-        dz = 0.0
+        return FX0 + half - S * t, FZ0
     else:
         t  = (phase - DUTY) / (1.0 - DUTY)
-        dx = -half + S * t
-        dz = STEP_H * math.sin(math.pi * t)
-    return FX0 + dx, FZ0 + dz
-
-def apply_cars():
-    for act, qp, qv, init_x, axis in _CARS:
-        world_x = init_x + axis * data.qpos[qp]
-        if axis > 0 and world_x > CAR_BOUND:
-            data.qpos[qp] = (-CAR_BOUND - init_x) / axis
-            data.qvel[qv] = 0.0
-        elif axis < 0 and world_x < -CAR_BOUND:
-            data.qpos[qp] = (CAR_BOUND - init_x) / axis
-            data.qvel[qv] = 0.0
-        data.ctrl[act] = CAR_KP * (CAR_SPEED - data.qvel[qv])
-
-def update_traffic_lights(t):
-    global _last_tl
-    state = "green" if (t % TRAFFIC_CYCLE) < GREEN_DURATION else "red"
-    if state != _last_tl:
-        _last_tl = state
-        on_r  = [1.0, 0.0, 0.0, 1.0];  off_r = [0.3, 0.0, 0.0, 1.0]
-        on_g  = [0.0, 1.0, 0.0, 1.0];  off_g = [0.0, 0.3, 0.0, 1.0]
-        if state == "green":
-            model.geom_rgba[_G_RED_B] = off_r; model.geom_rgba[_G_GRN_B] = on_g
-            model.geom_rgba[_G_RED_T] = off_r; model.geom_rgba[_G_GRN_T] = on_g
-        else:
-            model.geom_rgba[_G_RED_B] = on_r;  model.geom_rgba[_G_GRN_B] = off_g
-            model.geom_rgba[_G_RED_T] = on_r;  model.geom_rgba[_G_GRN_T] = off_g
-        print(f"[신호등] {state.upper()}")
-    return state
-
-def check_crosswalk(robot_x, robot_y, tl_state):
-    global _crosswalk_waiting
-    approaching = any(
-        abs(robot_x - cx) < _CW_X_R and (_CW_Y_IN - 2.5) < robot_y < _CW_Y_IN
-        for cx in _CW_XS
-    )
-    if approaching and tl_state == "red":
-        _crosswalk_waiting = True
-    if tl_state == "green" or robot_y > _CW_Y_OUT:
-        _crosswalk_waiting = False
-    return _crosswalk_waiting
+        return FX0 - half + S * t, FZ0 + STEP_H * math.sin(math.pi * t)
 
 def set_arm_stow():
     data.ctrl[arm_sh0]=0.0; data.ctrl[arm_sh1]=-3.14
@@ -151,18 +84,16 @@ def set_arm_stow():
 def apply_legs(t_sim, vx, vyaw):
     for name, cfg in LEGS.items():
         phase = (FREQ * t_sim + cfg["off"]) % 1.0
-        in_stance = phase < DUTY
         fx_t, fz_t = foot_traj(phase, vx, vyaw, cfg["hy_pos"])
         hy_t, kn_t = ik(fx_t, fz_t)
-        hx_t = 0.0
-        if in_stance:
-            data.ctrl[cfg["hx"]] = hx_t
+        if phase < DUTY:
+            data.ctrl[cfg["hx"]] = 0.0
             data.ctrl[cfg["hy"]] = hy_t
             data.ctrl[cfg["kn"]] = kn_t
-            _prev[name] = dict(hx=hx_t, hy=hy_t, kn=kn_t)
+            _prev[name] = dict(hx=0.0, hy=hy_t, kn=kn_t)
         else:
             p = _prev[name]
-            hx = SWING_FILTER*p["hx"] + (1-SWING_FILTER)*hx_t
+            hx = SWING_FILTER*p["hx"] + (1-SWING_FILTER)*0.0
             hy = SWING_FILTER*p["hy"] + (1-SWING_FILTER)*hy_t
             kn = SWING_FILTER*p["kn"] + (1-SWING_FILTER)*kn_t
             data.ctrl[cfg["hx"]] = hx
@@ -170,33 +101,14 @@ def apply_legs(t_sim, vx, vyaw):
             data.ctrl[cfg["kn"]] = kn
             _prev[name] = dict(hx=hx, hy=hy, kn=kn)
 
-# ──────────────────────────────────────────────────────────────
-#  메인
-# ──────────────────────────────────────────────────────────────
+# ── 메인 ──────────────────────────────────────────────────────
 if __name__ == '__main__':
     model = mujoco.MjModel.from_xml_path("scene_map.xml")
     data  = mujoco.MjData(model)
 
-    # 자동차
-    car1_act             = get_act("car1_motor")
-    car2_act             = get_act("car2_motor")
-    car3_act             = get_act("car3_motor")
-    car1_qpos, car1_qvel = get_jnt("car1_slide")
-    car2_qpos, car2_qvel = get_jnt("car2_slide")
-    car3_qpos, car3_qvel = get_jnt("car3_slide")
-    _CARS = [
-        (car1_act, car1_qpos, car1_qvel, -20.0, +1.0),
-        (car2_act, car2_qpos, car2_qvel, +18.0, -1.0),
-        (car3_act, car3_qpos, car3_qvel,  -5.0, +1.0),
-    ]
+    traffic.init(model, data)
+    cars.init(model, data)
 
-    # 신호등
-    _G_RED_B = get_geom("red_light_bottom")
-    _G_GRN_B = get_geom("green_light_bottom")
-    _G_RED_T = get_geom("red_light_top")
-    _G_GRN_T = get_geom("green_light_top")
-
-    # 로봇 액추에이터
     fl_hx,fl_hy,fl_kn = get_act("fl_hx"),get_act("fl_hy"),get_act("fl_kn")
     fr_hx,fr_hy,fr_kn = get_act("fr_hx"),get_act("fr_hy"),get_act("fr_kn")
     hl_hx,hl_hy,hl_kn = get_act("hl_hx"),get_act("hl_hy"),get_act("hl_kn")
@@ -233,9 +145,7 @@ if __name__ == '__main__':
             mujoco.mj_step(model, data)
 
         for n in LEGS: _prev[n] = dict(hx=0.0, hy=hy0, kn=kn0)
-
-        bz = data.qpos[BASE+2]
-        print(f"[안정화 완료] z={bz:.4f}")
+        print(f"[안정화 완료] z={data.qpos[BASE+2]:.4f}")
         viewer.sync()
 
         viewer.cam.type = mujoco.mjtCamera.mjCAMERA_TRACKING
@@ -246,9 +156,8 @@ if __name__ == '__main__':
 
         renderer     = mujoco.Renderer(model, height=360, width=480)
         CAM_INTERVAL = 10
-
-        cam_queue = MPQueue(maxsize=1)
-        cam_proc  = Process(target=_cam_worker.run, args=(cam_queue,), daemon=True)
+        cam_queue    = MPQueue(maxsize=1)
+        cam_proc     = Process(target=_cam_worker.run, args=(cam_queue,), daemon=True)
         cam_proc.start()
 
         dt      = model.opt.timestep
@@ -259,19 +168,19 @@ if __name__ == '__main__':
 
         while viewer.is_running():
             ramp = min(t / RAMP, 1.0)
-            vx   = CMD_VX   * ramp
+            vx   = CMD_VX * ramp
             vyaw = CMD_VYAW * ramp
 
-            tl_state = update_traffic_lights(t)
+            tl_state = traffic.update(t)
 
             bx = data.qpos[BASE]
             by = data.qpos[BASE+1]
-            if check_crosswalk(bx, by, tl_state):
+            if traffic.check_crosswalk(bx, by, tl_state):
                 vx = 0.0
 
             apply_legs(t, vx, vyaw)
             set_arm_stow()
-            apply_cars()
+            cars.apply(tl_state)
             mujoco.mj_step(model, data)
             viewer.sync()
 
@@ -284,16 +193,9 @@ if __name__ == '__main__':
 
             if step_i % log_int == 0:
                 bz = data.qpos[BASE+2]
-                q  = data.qpos[BASE+3:BASE+7]
-                roll, pitch, yaw = quat_to_rpy(q)
-                phase_fl = (FREQ*t + LEGS["FL"]["off"]) % 1.0
-                phase_fr = (FREQ*t + LEGS["FR"]["off"]) % 1.0
-                print(f"[t={t:5.1f}s] "
-                      f"pos=({bx:+.3f},{by:+.3f},{bz:.3f}) "
-                      f"tl={tl_state}  wait={_crosswalk_waiting}  "
-                      f"vx={vx:.2f}  "
-                      f"FL:{phase_fl:.2f}{'S' if phase_fl<DUTY else 'W'} "
-                      f"FR:{phase_fr:.2f}{'S' if phase_fr<DUTY else 'W'}")
+                roll, pitch, _ = quat_to_rpy(data.qpos[BASE+3:BASE+7])
+                print(f"[t={t:5.1f}s] pos=({bx:+.2f},{by:+.2f},{bz:.2f}) "
+                      f"tl={tl_state}  vx={vx:.2f}")
 
             t      += dt
             step_i += 1
