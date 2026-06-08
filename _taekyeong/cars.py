@@ -8,7 +8,7 @@ CAR_SPEED_CROSS = 9.0
 CAR_KP          = 200.0
 CAR_BOUND       = 24.0
 CW_SLOW_DIST    = 12.0
-CW_STOP_DIST    = 2.0
+CW_STOP_DIST    = 2.5
 CW_HALF         = 1.5
 
 # ── 상태 ──────────────────────────────────────────────────────
