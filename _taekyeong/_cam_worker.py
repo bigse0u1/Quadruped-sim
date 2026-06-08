@@ -20,8 +20,8 @@ def run(q):
                 break
             h1.set_data(item[0])
             h2.set_data(item[1])
-            fig.canvas.draw_idle()
-            plt.pause(0.001)
+            fig.canvas.draw()           # 즉시 렌더 (draw_idle은 macOS TkAgg에서 지연됨)
+            fig.canvas.flush_events()   # 이벤트 루프 강제 처리 → 화면 반영
         except Exception:
-            plt.pause(0.001)
+            fig.canvas.flush_events()
     plt.close()

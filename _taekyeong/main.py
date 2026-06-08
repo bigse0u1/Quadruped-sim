@@ -164,23 +164,30 @@ if __name__ == '__main__':
         raw_path  = pathfinding.astar(start_xy, GOAL)
         waypoints = pathfinding.smooth_path(raw_path) if raw_path else []
 
-        # 도로를 건너는 경로라면 직진 진입 웨이포인트 삽입.
-        # pathfinding 장애물이 y=1.0부터 통로를 막지만, smooth_path가
-        # 포인트를 합칠 수 있으므로 (0,0.8)·(0,2.3) 두 점을 명시적으로 고정.
+        # 도로를 건너는 경로라면 신호등 앞·뒤 2m 직진 웨이포인트 강제 삽입.
+        # smooth_path(min_dist=3) 가 중간 포인트를 합칠 수 있으므로 명시적으로 고정.
         if any(wy > 3.0 for _, wy in waypoints):
-            approach_wps = [(0.0, 0.8), (0.0, 2.3)]
-            new_wps, injected = [], False
+            # ── 진입 직진: (0, -0.5) → (0, 2.3) ──────────────────────────
+            new_wps, done = [], False
             for wp in waypoints:
-                if not injected and wp[1] > 0.6:
-                    new_wps.extend(approach_wps)
-                    injected = True
-                    if wp[1] > 2.8:          # 도로 위 포인트는 그대로 유지
+                if not done and wp[1] > -0.7:
+                    new_wps.extend([(0.0, -0.5), (0.0, 2.3)])
+                    done = True
+                    if wp[1] > 2.8:      # 도로 위 포인트는 그대로 유지
                         new_wps.append(wp)
-                    # 0.6 < y <= 2.8 인 기존 포인트는 approach_wps 로 대체
+                    # -0.7 < y ≤ 2.8 기존 포인트는 고정 포인트로 대체
                 else:
                     new_wps.append(wp)
-            waypoints = new_wps
-            print("[경로] 횡단보도 직진 진입 웨이포인트 삽입 완료")
+
+            # ── 출구 직진: (0, 9.5) ────────────────────────────────────────
+            final_wps, done = [], False
+            for wp in new_wps:
+                if not done and wp[1] > 9.3:
+                    final_wps.append((0.0, 9.5))
+                    done = True
+                final_wps.append(wp)
+            waypoints = final_wps
+            print("[경로] 횡단보도 직진 진입·출구 웨이포인트 삽입 완료")
 
         wp_idx    = 0
         arrived   = not bool(waypoints)
