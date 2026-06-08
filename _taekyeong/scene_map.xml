@@ -101,21 +101,21 @@
          횡단보도 3개
          ========================= -->
 
-    <!-- crosswalk 1 : x = -15 -->
+    <!-- crosswalk 1 : x = -15 (차량용) -->
     <geom name="crosswalk1_s1" type="box" size="1.2 0.18 0.013" pos="-15 3.3 0.013" material="crosswalk" contype="0" conaffinity="0"/>
     <geom name="crosswalk1_s2" type="box" size="1.2 0.18 0.013" pos="-15 4.1 0.013" material="crosswalk" contype="0" conaffinity="0"/>
     <geom name="crosswalk1_s3" type="box" size="1.2 0.18 0.013" pos="-15 4.9 0.013" material="crosswalk" contype="0" conaffinity="0"/>
     <geom name="crosswalk1_s4" type="box" size="1.2 0.18 0.013" pos="-15 5.7 0.013" material="crosswalk" contype="0" conaffinity="0"/>
     <geom name="crosswalk1_s5" type="box" size="1.2 0.18 0.013" pos="-15 6.5 0.013" material="crosswalk" contype="0" conaffinity="0"/>
 
-    <!-- crosswalk 2 : x = 0 -->
+    <!-- crosswalk 2 : x = 0 (로봇 전용) -->
     <geom name="crosswalk2_s1" type="box" size="1.2 0.18 0.013" pos="0 3.3 0.013" material="crosswalk" contype="0" conaffinity="0"/>
     <geom name="crosswalk2_s2" type="box" size="1.2 0.18 0.013" pos="0 4.1 0.013" material="crosswalk" contype="0" conaffinity="0"/>
     <geom name="crosswalk2_s3" type="box" size="1.2 0.18 0.013" pos="0 4.9 0.013" material="crosswalk" contype="0" conaffinity="0"/>
     <geom name="crosswalk2_s4" type="box" size="1.2 0.18 0.013" pos="0 5.7 0.013" material="crosswalk" contype="0" conaffinity="0"/>
     <geom name="crosswalk2_s5" type="box" size="1.2 0.18 0.013" pos="0 6.5 0.013" material="crosswalk" contype="0" conaffinity="0"/>
 
-    <!-- crosswalk 3 : x = 15 -->
+    <!-- crosswalk 3 : x = 15 (차량용) -->
     <geom name="crosswalk3_s1" type="box" size="1.2 0.18 0.013" pos="15 3.3 0.013" material="crosswalk" contype="0" conaffinity="0"/>
     <geom name="crosswalk3_s2" type="box" size="1.2 0.18 0.013" pos="15 4.1 0.013" material="crosswalk" contype="0" conaffinity="0"/>
     <geom name="crosswalk3_s3" type="box" size="1.2 0.18 0.013" pos="15 4.9 0.013" material="crosswalk" contype="0" conaffinity="0"/>

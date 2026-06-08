@@ -1,5 +1,5 @@
 import mujoco
-from traffic import CW_XS
+from traffic import CAR_CW_XS as CW_XS
 
 # ── 상수 ──────────────────────────────────────────────────────
 CAR_SPEED       = 6.0
