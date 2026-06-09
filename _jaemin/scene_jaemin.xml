@@ -1,5 +1,5 @@
 <mujoco model="spot map with obstacles and target (jaemin)">
-  <include file="../robots/boston_dynamics_spot/spot_arm.xml"/>
+  <include file="spot_arm_jaemin.xml"/>
 
   <compiler meshdir="../robots/boston_dynamics_spot/assets"/>
 
@@ -26,6 +26,7 @@
     <material name="obstacle"    rgba="0.45 0.45 0.55 1"/>
     <material name="target_red"  rgba="0.9 0.15 0.15 1"/>
     <material name="goal_mark"   rgba="0.1 0.8 0.2 0.4"/>
+    <material name="table"       rgba="0.55 0.4 0.25 1"/>
   </asset>
 
   <worldbody>
@@ -50,7 +51,7 @@
     <geom name="obs_4" type="box" size="1.0 0.5 0.5" pos="-3.0  2.5 0.5" material="obstacle"/>
     <geom name="obs_5" type="box" size="0.5 0.5 0.5" pos=" 0.5 -4.5 0.5" material="obstacle"/>
 
-    <!-- 목표 지점 시각화 (반투명 녹색 디스크) -->
+    <!-- 목표 지점 시각화 (반투명 녹색 디스크, 받침대 발치) -->
     <geom name="goal_marker"
           type="cylinder"
           size="0.4 0.005"
@@ -58,8 +59,15 @@
           material="goal_mark"
           contype="0" conaffinity="0"/>
 
-    <!-- 잡을 빨간 큐브 (free joint 으로 동역학 적용) -->
-    <body name="target_cube" pos="5.5 3.5 0.05">
+    <!-- 받침대(테이블): 윗면 z=0.15 → 큐브를 잡기 좋은 높이로 올림 -->
+    <geom name="pedestal"
+          type="box"
+          size="0.12 0.12 0.075"
+          pos="5.5 3.5 0.075"
+          material="table"/>
+
+    <!-- 잡을 빨간 큐브 (free joint). 받침대 윗면(0.15) + 큐브 반치수(0.04) = 0.19 -->
+    <body name="target_cube" pos="5.5 3.5 0.19">
       <freejoint name="target_free"/>
       <inertial pos="0 0 0" mass="0.05" diaginertia="0.0001 0.0001 0.0001"/>
       <geom name="target_cube_geom"

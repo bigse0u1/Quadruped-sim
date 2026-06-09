@@ -1,0 +1,5 @@
+# 생성물 / 임시 파일
+frames/
+__pycache__/
+*.pyc
+MUJOCO_LOG.TXT

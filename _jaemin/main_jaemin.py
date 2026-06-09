@@ -123,7 +123,8 @@ TARGET_QPOS = get_jnt_qposadr("target_free")
 TARGET_DOF  = get_jnt_dofadr("target_free")
 BODY_ID     = get_body_id("body")
 TARGET_ID   = get_body_id("target_cube")
-TARGET_START = np.array([5.5, 3.5, 0.05], dtype=float)
+TARGET_START = np.array([5.5, 3.5, 0.19], dtype=float)   # 받침대(0.15) 위 큐브
+GRASP_AXIS   = np.array([0.0, 0.0, -1.0])                # top-down 접근축
 
 # 팔 관절 정보
 ARM_JNT_NAMES = ["arm_sh0", "arm_sh1", "arm_el0", "arm_el1", "arm_wr0", "arm_wr1"]
@@ -187,6 +188,7 @@ def leg_ik(fx_t, fz_t, hy=HY_HOME, kn=KN_HOME):
 
 
 FX0, FZ0 = fk(HY_HOME, KN_HOME)
+L_FOOT_Z = abs(FZ0)        # 힙 아래 발까지의 유효 높이 (측면 발배치 → hx 매핑용)
 
 
 # ============================================================
@@ -213,22 +215,35 @@ LEGS = {
 _prev = {n: dict(hx=0.0, hy=HY_HOME, kn=KN_HOME) for n in LEGS}
 
 
-def foot_traj(phase, vx, vyaw, hip_y):
-    stride = vx / FREQ
-    yaw_d  = -vyaw * hip_y / FREQ      # 좌회전 시 우측 다리 stride↑
-    S      = stride + yaw_d
-    half   = S / 2.0
+def foot_traj(phase, vx, vyaw, hip_x, hip_y):
+    """Holonomic foot placement.
+    정지(stance) 동안 발은 지면에 박힌 채로 몸체에 대해
+    -(V + ω×r) 만큼 쓸려야 미끄럼 없이 추진/회전이 된다.
+      hip 속도 = (vx, 0) + vyaw·ẑ × (hip_x, hip_y)
+               = (vx - vyaw·hip_y,  vyaw·hip_x)
+    따라서 발은 그 반대로 한 사이클당
+      Sx = (vx - vyaw·hip_y)/FREQ   (앞뒤, 시상면)
+      Sy = (vyaw·hip_x)/FREQ        (좌우, hx 로 구현)
+    만큼 stance 동안 +half→-half 로 쓸어준다.
+    반환: (fx_target, fz_target, dy)  — dy 는 측면 발 오프셋
+    """
+    Sx     = (vx - vyaw * hip_y) / FREQ
+    Sy     = (vyaw * hip_x) / FREQ
+    halfx  = Sx / 2.0
+    halfy  = Sy / 2.0
 
     if phase < DUTY:
         t  = phase / DUTY
-        dx = half - S * t
+        dx = halfx - Sx * t
+        dy = halfy - Sy * t
         dz = 0.0
     else:
         t  = (phase - DUTY) / (1.0 - DUTY)
-        dx = -half + S * t
+        dx = -halfx + Sx * t
+        dy = -halfy + Sy * t
         dz = STEP_H * math.sin(math.pi * t)
 
-    return FX0 + dx, FZ0 + dz
+    return FX0 + dx, FZ0 + dz, dy
 
 
 def apply_legs(t_sim, vx, vyaw):
@@ -236,9 +251,11 @@ def apply_legs(t_sim, vx, vyaw):
         phase     = (FREQ * t_sim + cfg["off"]) % 1.0
         in_stance = phase < DUTY
 
-        fx_t, fz_t = foot_traj(phase, vx, vyaw, cfg["hy_pos"])
+        fx_t, fz_t, dy_t = foot_traj(phase, vx, vyaw, cfg["hx_pos"], cfg["hy_pos"])
         hy_t, kn_t = leg_ik(fx_t, fz_t)
-        hx_t       = clamp(HX_GAIN_YAW * vyaw * cfg["side"], HX_MIN, HX_MAX)
+        # 측면 발 오프셋 dy_t 를 hip-roll(hx) 각으로 변환: +hx → 발 +y 이동(≈L·sin hx)
+        hx_t       = clamp(math.asin(clamp(dy_t / L_FOOT_Z, -0.99, 0.99)),
+                           HX_MIN, HX_MAX)
 
         if in_stance:
             data.ctrl[cfg["hx"]] = hx_t
@@ -310,13 +327,20 @@ def _ee_tip_world(d, body_id=EE_BODY_ID):
     return pos + rot @ EE_LOCAL_OFFSET
 
 
+ORI_WEIGHT = 1.0           # 방향 오차 가중 (sin 단위 vs m)
+ORI_TOL    = 0.10          # 방향 수렴(sin) ≈ 5.7°
+
+
 def solve_arm_ik(target_world: np.ndarray,
                  seed: Optional[List[float]] = None,
+                 approach_axis: Optional[np.ndarray] = None,
                  verbose: bool = False) -> Tuple[List[float], float]:
     """
-    그리퍼 끝(EE)을 target_world (월드 좌표) 로 보내는 6-DoF 팔 IK.
+    그리퍼 끝(EE)을 target_world 로 보내는 팔 IK (Damped Least Squares).
+    approach_axis 가 주어지면 그리퍼 접근축(local +x)을 그 월드 방향으로 정렬
+    (top-down 그래스핑: approach_axis=(0,0,-1)). 큐브는 대칭이라 스핀은 자유.
     실제 시뮬레이션과 분리된 ik_data 위에서 풀이.
-    반환: ([sh0, sh1, el0, el1, wr0, wr1],  최종 error norm)
+    반환: ([sh0..wr1],  최종 위치 error norm[m])
     """
     # 현재 본체 자세는 그대로 두고, 팔 qpos 만 seed 또는 현재 ctrl 로 셋팅
     ik_data.qpos[:] = data.qpos[:]
@@ -330,6 +354,11 @@ def solve_arm_ik(target_world: np.ndarray,
         lo, hi = ARM_RANGE[i]
         ik_data.qpos[qadr] = clamp(seed_vals[i], lo, hi)
 
+    use_ori = approach_axis is not None
+    if use_ori:
+        des_axis = np.asarray(approach_axis, dtype=float)
+        des_axis = des_axis / (np.linalg.norm(des_axis) + 1e-12)
+
     # NOTE: mj_jac 은 forward dynamics 의 부산물 (cdof, com 등) 을 필요로 하므로
     #       단순 mj_kinematics 만으로는 dq=0 이 되어버린다 → mj_forward 사용
     mujoco.mj_forward(ik_model, ik_data)
@@ -341,21 +370,32 @@ def solve_arm_ik(target_world: np.ndarray,
     for it in range(IK_MAX_ITER):
         mujoco.mj_forward(ik_model, ik_data)
         ee = _ee_tip_world(ik_data)
-        err_vec = target_world - ee
-        err = float(np.linalg.norm(err_vec))
-        last_err = err
-        if err < EE_TOL:
-            if verbose:
-                print(f"   IK converged at iter {it}, err={err:.4f}")
-            break
+        pos_err = target_world - ee
+        last_err = float(np.linalg.norm(pos_err))
 
-        # 그리퍼 끝점에 대한 Jacobian (점의 위치는 ee, body 는 fngr)
         mujoco.mj_jac(ik_model, ik_data, jacp, jacr, ee, EE_BODY_ID)
-        J = jacp[:, ARM_DOF_ADR]                    # 3x6
 
-        # Damped least squares :  dq = J^T (J J^T + λ²I)^-1 e
-        JJT = J @ J.T + (IK_LAMBDA ** 2) * np.eye(3)
-        dq  = J.T @ np.linalg.solve(JJT, err_vec)
+        if use_ori:
+            cur_axis = ik_data.xmat[EE_BODY_ID].reshape(3, 3)[:, 0]  # 그리퍼 local +x
+            # cur→des 로 돌리는 회전벡터 (월드프레임), |.|≈sin(angle)
+            ori_err = np.cross(cur_axis, des_axis)
+            ori_mag = float(np.linalg.norm(ori_err))
+            if last_err < EE_TOL and ori_mag < ORI_TOL:
+                if verbose:
+                    print(f"   IK conv it={it} perr={last_err:.4f} oerr={ori_mag:.3f}")
+                break
+            err6 = np.concatenate([pos_err, ORI_WEIGHT * ori_err])
+            J = np.vstack([jacp[:, ARM_DOF_ADR], jacr[:, ARM_DOF_ADR]])   # 6x6
+            JJT = J @ J.T + (IK_LAMBDA ** 2) * np.eye(6)
+            dq  = J.T @ np.linalg.solve(JJT, err6)
+        else:
+            if last_err < EE_TOL:
+                if verbose:
+                    print(f"   IK converged at iter {it}, err={last_err:.4f}")
+                break
+            J = jacp[:, ARM_DOF_ADR]                    # 3x6
+            JJT = J @ J.T + (IK_LAMBDA ** 2) * np.eye(3)
+            dq  = J.T @ np.linalg.solve(JJT, pos_err)
 
         for i, qadr in enumerate(ARM_QPOS_ADR):
             lo, hi = ARM_RANGE[i]
@@ -559,31 +599,36 @@ class S:
 # ============================================================
 # 10. APPROACH 파라미터
 # ============================================================
-APPROACH_DIST = 0.65    # 본체 중심 → 큐브 거리 목표 (m)
-APPROACH_TIMEOUT = 6.0  # 초
+APPROACH_DIST = 0.60     # 본체 중심 → 큐브 거리 목표 (m)
+APPROACH_TIMEOUT = 14.0  # 초 (저속 미세접근 여유)
+APPROACH_VX_MIN  = 0.28  # 멀 때 최소 전진속도 (저속 보행 게이트 회피)
+APPROACH_REACH_MAX = 0.72  # 이 거리 안이면 팔 reach 가능 → 그래스핑 진행
 
 # Arm IK 타겟 오프셋들 (월드 좌표 기준, 큐브 기준 상대)
 PRE_GRASP_DZ  = 0.18   # 큐브 위 18cm
-DESCEND_DZ    = 0.02   # 큐브와 거의 같은 높이
-LIFT_HEIGHT   = 0.55   # 들어올리는 목표 z
+DESCEND_DZ    = 0.00   # 큐브 중심 높이 (턱이 큐브를 감싸도록)
+LIFT_HEIGHT   = 0.45   # 들어올리는 목표 z (큐브 시작 0.19 → 충분히 위)
 
 # Arm joint 부드러운 추종을 위한 max delta (rad/sim_step)
 ARM_MAX_RATE  = 0.06   # rad / sim step  (sim dt=0.002 가정 → 30 rad/s)
+GRIP_MAX_RATE = 0.004  # 그리퍼는 아주 천천히 (가벼운 큐브 발사 방지, ~0.8s 닫힘)
 
 
 # ============================================================
 # 11. 부드러운 팔 추종 (rate-limit)
 # ============================================================
 _arm_ctrl_state = [0.0] * 6   # 현재 ctrl 값 추적
+_grip_ctrl_state = [0.0]      # 그리퍼 ctrl 값 추적 (rate-limit 용)
 
 
 def init_arm_state_from_ctrl():
     for i, aid in enumerate(ARM_ACT_IDS):
         _arm_ctrl_state[i] = float(data.ctrl[aid])
+    _grip_ctrl_state[0] = float(data.ctrl[arm_f1x])
 
 
 def step_arm_toward(target_q: List[float], gripper: float, max_rate: float = ARM_MAX_RATE):
-    """ctrl 을 max_rate 이하로 target_q 로 한 step 만큼 이동"""
+    """ctrl 을 max_rate 이하로 target_q 로 한 step 만큼 이동. 그리퍼도 별도 rate-limit."""
     for i, aid in enumerate(ARM_ACT_IDS):
         cur = _arm_ctrl_state[i]
         d   = target_q[i] - cur
@@ -594,7 +639,13 @@ def step_arm_toward(target_q: List[float], gripper: float, max_rate: float = ARM
         new = clamp(new, lo, hi)
         _arm_ctrl_state[i] = new
         data.ctrl[aid] = new
-    data.ctrl[arm_f1x] = gripper
+    # 그리퍼: 가벼운 큐브가 튕겨나가지 않도록 천천히 닫음/엶
+    gcur = _grip_ctrl_state[0]
+    gd = gripper - gcur
+    if   gd >  GRIP_MAX_RATE: gd =  GRIP_MAX_RATE
+    elif gd < -GRIP_MAX_RATE: gd = -GRIP_MAX_RATE
+    _grip_ctrl_state[0] = gcur + gd
+    data.ctrl[arm_f1x] = _grip_ctrl_state[0]
 
 
 # ============================================================
@@ -617,9 +668,10 @@ def compute_approach_goal(start_xy, cube_xy, dist=APPROACH_DIST):
 # ============================================================
 # 13. 메인
 # ============================================================
-def main():
+def main(headless: bool = False, max_sim_time: float = 60.0):
     print("=" * 64)
-    print("  Spot v2 :  A* + Trot + Arm IK Grasp + FSM")
+    print("  Spot v2 :  A* + Trot + Arm IK Grasp + FSM"
+          + ("  [HEADLESS]" if headless else ""))
     print("=" * 64)
 
     # ───── 1. 경로 계획 ─────
@@ -645,7 +697,10 @@ def main():
     follower.reset(waypoints)
 
     # ───── 2. 시뮬레이터 ─────
-    with mujoco.viewer.launch_passive(model, data) as viewer:
+    import contextlib
+    viewer_cm = (contextlib.nullcontext(None) if headless
+                 else mujoco.viewer.launch_passive(model, data))
+    with viewer_cm as viewer:
         mujoco.mj_resetDataKeyframe(model, data, 0)
         reset_target_cube()
         set_arm_pose(ARM_STOW, GRIP_OPEN)
@@ -666,7 +721,8 @@ def main():
         for n in LEGS:
             _prev[n] = dict(hx=0.0, hy=hy0, kn=kn0)
         init_arm_state_from_ctrl()
-        viewer.sync()
+        if viewer:
+            viewer.sync()
         print(f"[Init] z={data.qpos[BASE+2]:.3f}  done")
 
         # ───── 3. 메인 루프 ─────
@@ -682,8 +738,10 @@ def main():
         ik_target_world = None   # 현재 IK 목표 (월드 좌표)
         ik_target_q     = [data.ctrl[a] for a in ARM_ACT_IDS]
         ik_gripper      = GRIP_OPEN
+        grasp_xy        = None   # CLOSE 시점에 고정하는 들어올리기 기준점
 
-        while viewer.is_running():
+        while (viewer.is_running() if viewer
+               else (t < max_sim_time and state != S.DONE)):
             # ── 현재 상태 ──
             bx = data.qpos[BASE + 0]
             by = data.qpos[BASE + 1]
@@ -717,16 +775,21 @@ def main():
                 dist    = math.hypot(dx, dy)
                 err     = dist - APPROACH_DIST
 
-                if abs(yaw_err) > 0.12:
-                    vx_cmd, vyaw_cmd = 0.0, clamp(1.5 * yaw_err, -1.0, 1.0)
+                # 항상 큐브를 향해 회전 (전진 중에도 동시에)
+                vyaw_cmd = clamp(2.0 * yaw_err, -MAX_VYAW, MAX_VYAW)
+                if abs(yaw_err) > 0.5:
+                    vx_cmd = 0.0                       # 크게 틀어졌으면 제자리 회전
+                elif dist > APPROACH_DIST:
+                    # 아직 멀면 보행이 잘 먹는 속도 유지 (저속 게이트 회피)
+                    vx_cmd = clamp(0.9 * err, APPROACH_VX_MIN, MAX_VX)
                 else:
-                    vx_cmd   = clamp(0.4 * err, -0.20, 0.30)
-                    vyaw_cmd = clamp(1.2 * yaw_err, -0.6, 0.6)
+                    vx_cmd = clamp(0.6 * err, -0.15, 0.10)  # 너무 가까우면 살짝 후진
 
                 ik_gripper = GRIP_OPEN
                 ik_target_q = [ARM_SEED[k] for k in ["sh0","sh1","el0","el1","wr0","wr1"]]
 
-                aligned = (abs(err) < 0.08 and abs(yaw_err) < 0.10)
+                # 팔 reach 밴드(0.45~0.80m) 안에서 큐브를 바라보면 바로 진행
+                aligned = (0.45 < dist < APPROACH_REACH_MAX and abs(yaw_err) < 0.15)
                 timeout = (t - state_t0) > APPROACH_TIMEOUT
                 if aligned or timeout:
                     why = "aligned" if aligned else "TIMEOUT"
@@ -737,53 +800,57 @@ def main():
                     init_arm_state_from_ctrl()
 
             elif state == S.PRE_GRASP:
-                # 그리퍼 끝을 큐브 위 18 cm 로 (그리퍼 열림)
+                # 그리퍼를 큐브 위 18cm, 아래(-z)를 향해 (top-down, 그리퍼 열림)
                 tgt = np.array([cube_x, cube_y, cube_z + PRE_GRASP_DZ])
                 seed = [ARM_SEED[k] for k in ["sh0","sh1","el0","el1","wr0","wr1"]]
-                q, err = solve_arm_ik(tgt, seed=seed)
+                q, err = solve_arm_ik(tgt, seed=seed, approach_axis=GRASP_AXIS)
                 ik_target_q = q
                 ik_gripper  = GRIP_OPEN
                 ik_target_world = tgt
 
                 ee_err = float(np.linalg.norm(_ee_tip_world(data) - tgt))
-                if ee_err < 0.05 or (t - state_t0) > 3.0:
+                if ee_err < 0.04 or (t - state_t0) > 3.0:
                     print(f"[FSM] PRE_GRASP → DESCEND  ee_err={ee_err:.3f}")
                     state = S.DESCEND
                     state_t0 = t
 
             elif state == S.DESCEND:
-                tgt = np.array([cube_x, cube_y, max(cube_z + DESCEND_DZ, 0.04)])
+                # 그리퍼 끝을 큐브 중심으로 내려 턱이 큐브를 좌우로 감싸게
+                tgt = np.array([cube_x, cube_y, cube_z + DESCEND_DZ])
                 seed = ik_target_q
-                q, err = solve_arm_ik(tgt, seed=seed)
+                q, err = solve_arm_ik(tgt, seed=seed, approach_axis=GRASP_AXIS)
                 ik_target_q = q
                 ik_gripper  = GRIP_OPEN
                 ik_target_world = tgt
 
                 ee_err = float(np.linalg.norm(_ee_tip_world(data) - tgt))
-                if ee_err < 0.04 or (t - state_t0) > 3.5:
+                if ee_err < 0.03 or (t - state_t0) > 3.5:
                     print(f"[FSM] DESCEND → CLOSE  ee_err={ee_err:.3f}")
                     state = S.CLOSE
                     state_t0 = t
 
             elif state == S.CLOSE:
-                # 자세 유지하며 그리퍼만 닫음
+                # 자세 유지하며 그리퍼만 천천히 닫음 (rate-limit)
                 ik_gripper = GRIP_CLOSE
                 # ik_target_q 는 이전 단계 그대로
-                if (t - state_t0) > 1.2:
+                if (t - state_t0) > 1.5:
+                    grasp_xy = (cube_x, cube_y)     # 들어올릴 기준점 고정
                     print(f"[FSM] CLOSE → LIFT  cube_z={cube_z:.3f}")
                     state = S.LIFT
                     state_t0 = t
 
             elif state == S.LIFT:
-                tgt = np.array([cube_x, cube_y, LIFT_HEIGHT])
+                # 잡은 지점 바로 위로 수직 상승 (날아간 큐브 추적 방지: grasp_xy 고정)
+                lx, ly = grasp_xy if grasp_xy is not None else (cube_x, cube_y)
+                tgt = np.array([lx, ly, LIFT_HEIGHT])
                 seed = ik_target_q
-                q, err = solve_arm_ik(tgt, seed=seed)
+                q, err = solve_arm_ik(tgt, seed=seed, approach_axis=GRASP_AXIS)
                 ik_target_q = q
                 ik_gripper  = GRIP_CLOSE
                 ik_target_world = tgt
 
                 if (t - state_t0) > 2.5:
-                    if cube_z > 0.20:
+                    if cube_z > 0.30:
                         print(f"[FSM] LIFT → HOLD  ✓ cube_z={cube_z:.3f} (성공)")
                     else:
                         print(f"[FSM] LIFT → HOLD  cube_z={cube_z:.3f} (놓침)")
@@ -812,7 +879,8 @@ def main():
             step_arm_toward(ik_target_q, ik_gripper)
 
             mujoco.mj_step(model, data)
-            viewer.sync()
+            if viewer:
+                viewer.sync()
 
             # ─────────── 로그 ───────────
             if step_i % log_int == 0:
@@ -832,8 +900,26 @@ def main():
 
             t      += dt
             step_i += 1
-            time.sleep(max(0.0, dt - 0.0001))
+            if viewer:
+                time.sleep(max(0.0, dt - 0.0001))
+
+        # ───── 4. 헤드리스 결과 요약 ─────
+        if headless:
+            cube_z = data.qpos[TARGET_QPOS + 2]
+            bx, by = data.qpos[BASE + 0], data.qpos[BASE + 1]
+            success = (state == S.DONE and cube_z > 0.30)
+            print("=" * 64)
+            print(f"[RESULT] final_state={state}  t={t:.2f}s")
+            print(f"[RESULT] base_pos=({bx:+.2f},{by:+.2f},{data.qpos[BASE+2]:.3f})")
+            print(f"[RESULT] cube_z={cube_z:.3f}  "
+                  f"grasp={'SUCCESS ✓' if success else 'FAIL ✗'}")
+            print("=" * 64)
 
 
 if __name__ == "__main__":
-    main()
+    import sys
+    try:
+        sys.stdout.reconfigure(encoding="utf-8")   # Windows cp949 유니코드 크래시 방지
+    except Exception:
+        pass
+    main(headless=("--headless" in sys.argv))
