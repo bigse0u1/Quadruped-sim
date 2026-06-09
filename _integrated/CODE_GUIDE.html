@@ -1,0 +1,278 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>통합 시나리오 코드 설명서 · Spot Robot</title>
+<style>
+  :root{
+    --bg:#0f1420; --panel:#161d2e; --panel2:#1d2740; --line:#2b3754;
+    --txt:#e6ecf7; --muted:#9fb0cc; --accent:#5db0ff; --accent2:#7ee0a0;
+    --warn:#ffd27a; --codebg:#0c1322;
+  }
+  *{box-sizing:border-box}
+  html{scroll-behavior:smooth}
+  body{margin:0;background:var(--bg);color:var(--txt);
+    font-family:"Segoe UI","Malgun Gothic",sans-serif;line-height:1.65;font-size:15px}
+  .wrap{display:flex;max-width:1180px;margin:0 auto}
+  /* 사이드바 TOC */
+  nav.toc{position:sticky;top:0;align-self:flex-start;width:240px;min-width:240px;
+    height:100vh;overflow:auto;padding:24px 16px;border-right:1px solid var(--line);
+    background:var(--panel)}
+  nav.toc h2{font-size:13px;letter-spacing:.08em;color:var(--muted);text-transform:uppercase;margin:0 0 12px}
+  nav.toc a{display:block;color:var(--muted);text-decoration:none;padding:6px 10px;border-radius:6px;
+    font-size:13.5px;margin-bottom:2px}
+  nav.toc a:hover{background:var(--panel2);color:var(--txt)}
+  main{flex:1;min-width:0;padding:36px 44px 120px}
+  header.hero{background:linear-gradient(135deg,#1b2a4a,#0f1420);border:1px solid var(--line);
+    border-radius:16px;padding:30px 34px;margin-bottom:34px}
+  header.hero h1{margin:0 0 8px;font-size:27px}
+  header.hero p{margin:0;color:var(--muted)}
+  .badges{margin-top:16px;display:flex;flex-wrap:wrap;gap:8px}
+  .badge{background:var(--panel2);border:1px solid var(--line);color:var(--accent);
+    padding:4px 11px;border-radius:20px;font-size:12.5px}
+  h2.sec{font-size:21px;margin:42px 0 14px;padding-bottom:8px;border-bottom:2px solid var(--line)}
+  h3{font-size:16.5px;margin:24px 0 8px;color:var(--accent)}
+  p,li{color:var(--txt)}
+  code{background:var(--codebg);color:#9fe6c0;padding:1.5px 6px;border-radius:5px;
+    font-family:"Consolas",monospace;font-size:13px}
+  pre{background:var(--codebg);border:1px solid var(--line);border-radius:10px;
+    padding:16px 18px;overflow:auto;font-size:13px;line-height:1.55}
+  pre code{background:none;color:#cfe3ff;padding:0}
+  table{border-collapse:collapse;width:100%;margin:14px 0;font-size:13.5px}
+  th,td{border:1px solid var(--line);padding:8px 11px;text-align:left;vertical-align:top}
+  th{background:var(--panel2);color:var(--accent)}
+  tr:nth-child(even) td{background:rgba(255,255,255,.02)}
+  .callout{border-left:4px solid var(--accent2);background:rgba(126,224,160,.08);
+    padding:12px 16px;border-radius:0 10px 10px 0;margin:14px 0}
+  .callout.warn{border-color:var(--warn);background:rgba(255,210,122,.08)}
+  .callout b{color:var(--accent2)}
+  .callout.warn b{color:var(--warn)}
+  .pipe{background:var(--codebg);border:1px solid var(--line);border-radius:10px;padding:18px;
+    font-family:"Consolas",monospace;font-size:13px;color:#cfe3ff;white-space:pre;overflow:auto}
+  .grid{display:flex;flex-wrap:wrap;gap:10px;margin:14px 0}
+  .card{background:var(--panel);border:1px solid var(--line);border-radius:10px;padding:12px 14px;flex:1;min-width:150px}
+  .card .k{color:var(--accent);font-weight:600}
+  .muted{color:var(--muted)}
+  a.inline{color:var(--accent)}
+  @media(max-width:820px){nav.toc{display:none}main{padding:22px}}
+</style>
+</head>
+<body>
+<div class="wrap">
+<nav class="toc">
+  <h2>목차</h2>
+  <a href="#overview">1. 전체 개요</a>
+  <a href="#objects">2. 사물 정의</a>
+  <a href="#scene">3. scene_task.xml</a>
+  <a href="#code">4. main_task.py</a>
+  <a href="#params">5. 주요 파라미터</a>
+  <a href="#run">6. 실행법</a>
+  <a href="#issues">7. 해결한 이슈</a>
+</nav>
+<main>
+
+<header class="hero">
+  <h1>🦿 통합 시나리오 코드 설명서</h1>
+  <p>Spot 4족보행 로봇이 <b>자연어 프롬프트</b>로 지정한 사물을 가져오는 통합 시뮬레이션.<br>
+     출발 → A* 내비 → <b>비전 신호등 인지</b> → 횡단보도 통과 → <b>사물 파지</b> → 운반 → 내려놓기.</p>
+  <div class="badges">
+    <span class="badge">MuJoCo</span><span class="badge">A* Pathfinding</span>
+    <span class="badge">Holonomic Trot</span><span class="badge">6-DoF Arm IK</span>
+    <span class="badge">Vision Traffic Light</span><span class="badge">Weld Grasp</span>
+    <span class="badge">Google Scanned Objects</span>
+  </div>
+</header>
+
+<!-- 1 -->
+<h2 class="sec" id="overview">1. 전체 개요</h2>
+<h3>1.1 시나리오 파이프라인</h3>
+<div class="pipe">프롬프트("마리오 잡아와")
+ └→ 사물 좌표 조회
+     └→ A* 경로계획 (출발 → 사물 앞 staging)
+         └→ holonomic trot 보행으로 추종
+             └→ [도로] 비전으로 신호등 초록 인지 → 횡단보도 통과
+                 └→ 사물 앞 정밀 접근 (APPROACH)
+                     └→ top-down 팔 IK 하강 → 스냅 + weld 파지
+                         └→ 들어올림 (LIFT)
+                             └→ 복귀 A* + 횡단보도 재통과
+                                 └→ 최종 위치(0,-19)에서 weld 해제 (내려놓기)</div>
+
+<h3>1.2 파일 구성</h3>
+<table>
+<tr><th>파일</th><th>역할</th></tr>
+<tr><td><code>main_task.py</code></td><td>통합 컨트롤러 (보행·IK·비전·FSM·CLI 전부)</td></tr>
+<tr><td><code>scene_task.xml</code></td><td>친구 맵 <code>scene_map.xml</code> include + 사물 6개 + 파지 weld</td></tr>
+<tr><td><code>_cam_view.py</code></td><td>로봇 카메라 3패널 별창 (matplotlib, 별도 프로세스)</td></tr>
+<tr><td><code>assets/&lt;이름&gt;/</code></td><td>사물 메쉬(<code>model.obj</code>) + 텍스처(<code>texture.png</code>)</td></tr>
+<tr><td><code>_taekyeong/</code> <span class="muted">(재사용)</span></td><td><code>scene_map.xml</code>·<code>pathfinding.py</code>·<code>traffic.py</code>·<code>cars.py</code></td></tr>
+</table>
+<div class="callout">원본 <code>_taekyeong/</code>·<code>_jaemin/</code> 파일은 <b>수정하지 않고</b> include/재사용한다.</div>
+
+<!-- 2 -->
+<h2 class="sec" id="objects">2. 사물 정의</h2>
+<p><a class="inline" href="https://github.com/kevinzakka/mujoco_scanned_objects">Google Scanned Objects</a>의 실물 스캔 메쉬 사용.
+초록 플랫폼(윗면 z=0.20) 가장자리에 base가 놓이며, 최대 치수 ~0.13 m로 스케일.</p>
+<table>
+<tr><th>키</th><th>사물</th><th>구역</th><th>위치 (x,y)</th><th>도로 횡단</th></tr>
+<tr><td><code>mario</code></td><td>마리오</td><td>green_01 (북서)</td><td>(-22.7, 22.05)</td><td>O</td></tr>
+<tr><td><code>yoshi</code></td><td>요시</td><td>green_01</td><td>(-21.3, 22.05)</td><td>O</td></tr>
+<tr><td><code>android</code></td><td>안드로이드</td><td>green_02 (동)</td><td>(13.05, 12.3)</td><td>O</td></tr>
+<tr><td><code>dino</code></td><td>공룡</td><td>green_02</td><td>(13.05, 13.7)</td><td>O</td></tr>
+<tr><td><code>elephant</code></td><td>코끼리</td><td>green_03 (남)</td><td>(-11.4, -3.95)</td><td>X</td></tr>
+<tr><td><code>dog</code></td><td>강아지</td><td>green_03</td><td>(-10.6, -3.95)</td><td>X</td></tr>
+</table>
+<p class="muted">프롬프트 한/영 인식(<code>NAME_ALIASES</code>): 마리오/mario, 요시/yoshi, 안드로이드(로봇)/android, 공룡(다이노)/dino, 코끼리/elephant, 강아지(개)/dog.</p>
+
+<!-- 3 -->
+<h2 class="sec" id="scene">3. scene_task.xml 구조</h2>
+<pre><code>&lt;mujoco&gt;
+  &lt;include file="../_taekyeong/scene_map.xml"/&gt;        &lt;!-- 맵 그대로 --&gt;
+  &lt;asset&gt;  &lt;!-- 키별 prefix로 이름 충돌 방지 --&gt;
+    &lt;texture name="mario_tex" file="assets/mario/texture.png"/&gt;                    &lt;!-- 모델디렉토리 상대 --&gt;
+    &lt;material name="mario_mat" texture="mario_tex"/&gt;
+    &lt;mesh name="mario_mesh" file="../../../_integrated/assets/mario/model.obj" scale="..."/&gt;  &lt;!-- meshdir 상대 --&gt;
+  &lt;/asset&gt;
+  &lt;worldbody&gt;
+    &lt;body name="obj_mario" pos="-22.7 22.05 0.20"&gt;
+      &lt;freejoint name="mario_free"/&gt;
+      &lt;geom type="mesh" mesh="mario_mesh" material="mario_mat" mass="0.2" condim="6"/&gt;
+    &lt;/body&gt;
+  &lt;/worldbody&gt;
+  &lt;equality&gt;
+    &lt;weld name="grab_mario" body1="arm_link_fngr" body2="obj_mario" active="false" solref="0.02 1"/&gt;
+  &lt;/equality&gt;
+&lt;/mujoco&gt;</code></pre>
+<div class="callout"><b>경로 핵심</b> — 맵을 include하면 <code>meshdir</code>이 spot assets로 잡힘.
+<br>· <b>텍스처</b> <code>file=</code> 는 모델 디렉토리(<code>_integrated</code>) 상대 → <code>assets/mario/texture.png</code>
+<br>· <b>메쉬</b> <code>file=</code> 는 <code>meshdir</code> 상대 → <code>../../../_integrated/assets/mario/model.obj</code>
+<br>둘 다 상대경로라 다른 PC에서도 동작.</div>
+
+<!-- 4 -->
+<h2 class="sec" id="code">4. main_task.py — 섹션별 설명</h2>
+
+<h3>4.0 모듈 로드 &amp; 런타임 설정</h3>
+<ul>
+<li><code>scene_task.xml</code>로 <code>model</code>/<code>data</code> 로드. IK 전용 사본 <code>ik_model</code>/<code>ik_data</code>(실제 시뮬과 분리).</li>
+<li><code>traffic.GREEN_DURATION=16</code>, <code>TRAFFIC_CYCLE=24</code> — <b>초록불 연장</b>(도로 완전 횡단 시간 확보).</li>
+<li><code>pathfinding._OBSTACLES += [초록 플랫폼 3개]</code> → A*가 0.2 m 턱을 피해 가장자리로 접근.</li>
+</ul>
+
+<h3>4.1 유틸리티</h3>
+<p><code>get_act / jnt_qadr / jnt_dadr / jnt_range / body_id / eq_id</code>(이름→인덱스), <code>quat_to_rpy</code>, <code>clamp</code>, <code>wrap_angle</code>.</p>
+
+<h3>4.2 사물 레지스트리</h3>
+<ul>
+<li><code>Obj</code> 데이터클래스: <code>key, body, free, weld, start(위치), stop(staging)</code> + 런타임 인덱스.</li>
+<li><code>stop</code> = 사물에서 ~1.6 m 떨어진 <b>staging point</b>(플랫폼 인플레이션 밖). 최종 0.62 m 접근은 APPROACH 담당.</li>
+<li><code>reset_objects()</code>: 키프레임 패딩으로 0이 된 사물 qpos를 받침 위로 재배치.</li>
+<li><code>parse_prompt(text)</code>: 프롬프트에서 사물 키 추출.</li>
+</ul>
+
+<h3>4.3 다리 기구학 + holonomic 보행</h3>
+<ul>
+<li><code>fk</code>/<code>leg_ik</code>: 한 다리 2관절(hy, kn) 정/역기구학.</li>
+<li><b><code>foot_traj(phase, vx, vyaw, hip_x, hip_y)</code></b> — 정지 동안 발이 몸체에 대해 <code>-(V + ω×r)</code> 만큼 쓸려 미끄럼 없이 추진/회전:
+  <br><code>Sx = (vx - vyaw·hip_y)/FREQ</code> (앞뒤), <code>Sy = (vyaw·hip_x)/FREQ</code> (좌우 ← 회전 핵심).</li>
+<li><code>apply_legs</code>: 측면 발 오프셋 <code>dy</code> → <code>hx = asin(dy/L)</code> 로 변환.</li>
+</ul>
+<div class="callout"><b>개선</b> — 원래 회전이 stride 차분에만 의존해 느렸음(6°/s). holonomic 측면 발배치(hx) 추가로 ~20°/s 로 강화.</div>
+
+<h3>4.4 팔 IK + 그래스핑</h3>
+<ul>
+<li><code>ARM_SEED</code>(준비)/<code>ARM_STOW</code>(접음), <code>step_arm_toward</code>(rate-limit로 부드럽게).</li>
+<li><b><code>solve_arm_ik(target, seed, approach_axis)</code></b> — Damped Least Squares.
+  <code>approach_axis</code> 주면 그리퍼 접근축을 그 방향으로 정렬 → <b>top-down 파지</b>(<code>GRASP_AXIS=(0,0,-1)</code>). 위치(3)+방향(3) 6-DoF.</li>
+</ul>
+
+<h3>4.5 weld 파지 / 해제</h3>
+<ul>
+<li><code>attach(obj)</code>: 상대 자세 계산 후 weld 활성화. <b>그리퍼가 사물 0.16 m 이내일 때만</b> 부착(폭발 방지).</li>
+<li><code>detach(obj)</code>: weld 비활성(내려놓기).</li>
+</ul>
+<div class="callout"><b>개선</b> — 작은 물건 마찰 파지가 불안정해 튕겨나감. → 하강 중 사물을 그리퍼 끝으로 <b>스냅</b> + <b>soft weld</b>(<code>solref="0.02 1"</code>)로 전환 → 6개 전부 안정.</div>
+
+<h3>4.6 비전 — 신호등 인지 (Vision)</h3>
+<ol>
+<li>로봇에서 <b>가까운 신호등</b>(남 <code>TL_BOTTOM</code>/북 <code>TL_TOP</code>) 선택.</li>
+<li>그 신호등을 보는 오프스크린 카메라로 렌더.</li>
+<li><b>초록 픽셀 수 vs 빨강 픽셀 수</b> 비교 → 초록 우세하면 green (운반 사물이 가려도 강건).</li>
+</ol>
+<div class="callout warn"><b>성능</b> — 비전 렌더는 무거워서 <b>0.1초마다(20스텝)만</b> 호출하고 결과 캐시 → 횡단보도에서도 배속 유지.</div>
+
+<h3>4.7 횡단보도 게이트 (CrosswalkGate)</h3>
+<p><b>양방향</b>(남↔북) 도로 진입 전 정지. <code>idle → waiting → crossing</code>. <b>빨강을 본 뒤 초록</b>(신선한 초록)이어야 출발 → 횡단 중 빨강 전환으로 차에 치이는 것 방지.</p>
+
+<h3>4.8 경로계획 &amp; 추종</h3>
+<ul>
+<li><code>plan(start, goal)</code>: <code>astar</code> + <code>smooth_path</code>. <b>도로 횡단 시 중앙선(x=0) 직진</b> 경유점 <code>(0,8.8),(0,1.0)</code> 강제 삽입.</li>
+<li><code>PathFollower</code>: pure-pursuit. 헤딩 오차 작으면(&lt;0.05 rad) 회전 0 → 직진 흔들림 억제.</li>
+</ul>
+
+<h3>4.9 FSM (main 루프)</h3>
+<table>
+<tr><th>상태</th><th>하는 일</th></tr>
+<tr><td>GO_TO_OBJECT</td><td>staging까지 A* 추종 + 횡단보도 게이트, 팔 접음</td></tr>
+<tr><td>APPROACH</td><td>사물 정면 0.62 m 정밀 접근(최소 0.5 m/s로 저속 게이트 회피)</td></tr>
+<tr><td>PRE_GRASP</td><td>사물 위 18 cm top-down IK</td></tr>
+<tr><td>DESCEND</td><td>하강하며 0.16 m 근접 시 <b>스냅+weld</b></td></tr>
+<tr><td>CLOSE</td><td>그리퍼 닫는 모션(시각용)</td></tr>
+<tr><td>LIFT</td><td>사물 들어올림</td></tr>
+<tr><td>RETURN</td><td>(0,-19) 복귀 A* + 횡단보도 재통과, 운반 자세 유지</td></tr>
+<tr><td>PLACE_DOWN → RELEASE → DONE</td><td>팔 하강 → weld 해제(내려놓기) → 종료</td></tr>
+</table>
+
+<h3>4.10 녹화 / 카메라 / 배속 / CLI</h3>
+<div class="grid">
+<div class="card"><span class="k">--speed=N</span><br>sleep을 dt/N로 축소. 고배속엔 렌더 빈도도 감소.</div>
+<div class="card"><span class="k">--cam</span><br>별도 프로세스로 body/arm/신호등 3패널 표시.</div>
+<div class="card"><span class="k">--record</span><br>추적+비전 합성 프레임을 frames/에 PNG 저장.</div>
+<div class="card"><span class="k">--headless</span><br>뷰어 없이 최대 속도 + 결과 출력.</div>
+</div>
+
+<!-- 5 -->
+<h2 class="sec" id="params">5. 주요 파라미터 (튜닝 포인트)</h2>
+<table>
+<tr><th>파라미터</th><th>값</th><th>의미</th></tr>
+<tr><td><code>FREQ / DUTY / STEP_H</code></td><td>2.4 / 0.65 / 0.13</td><td>보행 주파수·지지율·발 높이</td></tr>
+<tr><td><code>MAX_VX / MAX_VYAW</code></td><td>0.75 / 1.2</td><td>최대 전진/회전 속도</td></tr>
+<tr><td><code>APPROACH_DIST</code></td><td>0.62</td><td>파지 접근 정지 거리</td></tr>
+<tr><td><code>APPROACH_VX_MIN</code></td><td>0.50</td><td>접근 최소 속도(저속 게이트 회피)</td></tr>
+<tr><td><code>GRASP_AXIS</code></td><td>(0,0,-1)</td><td>top-down 접근축</td></tr>
+<tr><td><code>GRIP_MAX_RATE</code></td><td>0.004</td><td>그리퍼 닫힘 속도</td></tr>
+<tr><td><code>traffic.GREEN_DURATION</code></td><td>16</td><td>초록불 길이</td></tr>
+<tr><td><code>vision_stride</code></td><td>0.1초</td><td>비전 렌더 주기(배속 유지)</td></tr>
+</table>
+
+<!-- 6 -->
+<h2 class="sec" id="run">6. 실행법</h2>
+<pre><code>cd _integrated
+python main_task.py                          # 대화형("공룡 잡아와")
+python main_task.py --obj=mario              # 직접 지정 (뷰어)
+python main_task.py --obj=mario --speed=5    # 5배속
+python main_task.py --obj=mario --cam        # 카메라 별창 함께
+python main_task.py --obj=mario --speed=5 --cam   # 추천
+python main_task.py --headless --obj=mario   # 결과만 빠르게
+python main_task.py --record  --obj=mario    # frames/ 에 녹화</code></pre>
+<p class="muted">물건 키: <code>mario, yoshi, android, dino, elephant, dog</code></p>
+
+<!-- 7 -->
+<h2 class="sec" id="issues">7. 개발 중 해결한 핵심 이슈</h2>
+<table>
+<tr><th>#</th><th>문제</th><th>해결</th></tr>
+<tr><td>1</td><td>회전이 너무 느림</td><td>holonomic 측면 발배치(hx) 추가</td></tr>
+<tr><td>2</td><td>저속에서 제자리걸음</td><td>APPROACH 최소 속도 0.5 m/s</td></tr>
+<tr><td>3</td><td>작은 물건 파지 실패/폭발</td><td>스냅 + soft weld, 근접 시에만 부착</td></tr>
+<tr><td>4</td><td>횡단 중 차 충돌</td><td>초록불 연장 + 양방향 게이트 + 중앙선 직진</td></tr>
+<tr><td>5</td><td>운반 사물이 신호등 가림</td><td>가까운 신호등 선택 + 초록/빨강 픽셀 비교</td></tr>
+<tr><td>6</td><td>횡단보도에서 배속 풀림</td><td>비전 렌더 0.1초 주기 캐시</td></tr>
+</table>
+
+<p style="margin-top:50px;color:var(--muted);font-size:12.5px;text-align:center">
+Spot Integrated Task · MuJoCo · 자세한 텍스트 버전은 <code>CODE_GUIDE.md</code> 참고
+</p>
+
+</main>
+</div>
+</body>
+</html>

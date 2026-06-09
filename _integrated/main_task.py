@@ -146,32 +146,34 @@ class Obj:
     dadr: int = 0
     eqid: int = 0
 
-# 한국어/영어 이름 → key
+# 한국어/영어 이름 → key  (실물 스캔 사물)
 NAME_ALIASES = {
-    "apple": "apple", "사과": "apple",
-    "banana": "banana", "바나나": "banana",
-    "orange": "orange", "오렌지": "orange", "귤": "orange",
-    "grape": "grape", "포도": "grape",
-    "lemon": "lemon", "레몬": "lemon",
-    "tomato": "tomato", "토마토": "tomato",
+    "mario": "mario", "마리오": "mario",
+    "yoshi": "yoshi", "요시": "yoshi",
+    "android": "android", "안드로이드": "android", "로봇": "android",
+    "dino": "dino", "공룡": "dino", "다이노": "dino", "디노": "dino",
+    "elephant": "elephant", "코끼리": "elephant",
+    "dog": "dog", "강아지": "dog", "개": "dog", "puppy": "dog",
 }
 
-# 물건은 플랫폼 남쪽 가장자리에 배치(로봇이 턱에 막히기 전 reach 안).
-# stop = staging point (물건에서 남쪽 1.6m, 플랫폼 인플레이션 밖). 최종 0.62m 접근은 APPROACH 가 처리.
+# 실물 사물 base 가 z=0.20(플랫폼 윗면)에 놓임.
+# stop = staging point (사물 남쪽/서쪽 ~1.6m, 플랫폼 인플레이션 밖). 최종 0.62m 접근은 APPROACH.
 OBJECTS = {
-    "apple":  Obj("apple",  "obj_apple",  "apple_free",  "grab_apple",
-                  np.array([-22.7, 22.05, 0.24]), (-22.7, 20.45)),
-    "banana": Obj("banana", "obj_banana", "banana_free", "grab_banana",
-                  np.array([-21.3, 22.05, 0.24]), (-21.3, 20.45)),
-    # green_02 는 서쪽 가장자리 배치 + 서쪽에서 접근 (남쪽은 횡단보도 통로로 막힘)
-    "orange": Obj("orange", "obj_orange", "orange_free", "grab_orange",
-                  np.array([13.05, 12.3, 0.24]), (11.0, 12.3)),
-    "grape":  Obj("grape",  "obj_grape",  "grape_free",  "grab_grape",
-                  np.array([13.05, 13.7, 0.24]), (11.0, 13.7)),
-    "lemon":  Obj("lemon",  "obj_lemon",  "lemon_free",  "grab_lemon",
-                  np.array([-11.4, -3.95, 0.24]), (-11.4, -5.55)),
-    "tomato": Obj("tomato", "obj_tomato", "tomato_free", "grab_tomato",
-                  np.array([-10.6, -3.95, 0.24]), (-10.6, -5.55)),
+    # green_01 (북서, 횡단)
+    "mario":    Obj("mario",    "obj_mario",    "mario_free",    "grab_mario",
+                    np.array([-22.7, 22.05, 0.20]), (-22.7, 20.45)),
+    "yoshi":    Obj("yoshi",    "obj_yoshi",    "yoshi_free",    "grab_yoshi",
+                    np.array([-21.3, 22.05, 0.20]), (-21.3, 20.45)),
+    # green_02 (동, 횡단) — 서쪽에서 접근 (남쪽은 횡단보도 통로로 막힘)
+    "android":  Obj("android",  "obj_android",  "android_free",  "grab_android",
+                    np.array([13.05, 12.3, 0.20]), (11.0, 12.3)),
+    "dino":     Obj("dino",     "obj_dino",     "dino_free",     "grab_dino",
+                    np.array([13.05, 13.7, 0.20]), (11.0, 13.7)),
+    # green_03 (남)
+    "elephant": Obj("elephant", "obj_elephant", "elephant_free", "grab_elephant",
+                    np.array([-11.4, -3.95, 0.20]), (-11.4, -5.55)),
+    "dog":      Obj("dog",      "obj_dog",      "dog_free",      "grab_dog",
+                    np.array([-10.6, -3.95, 0.20]), (-10.6, -5.55)),
 }
 for o in OBJECTS.values():
     o.body_id = body_id(o.body)
@@ -573,7 +575,7 @@ def stabilize(viewer, n=4000):
     init_arm_state_from_ctrl()
 
 
-def main(target_key="apple", headless=False, max_sim_time=240.0, show_cam=False,
+def main(target_key="mario", headless=False, max_sim_time=240.0, show_cam=False,
          record=False, record_dir="frames", speed=1.0):
     obj = OBJECTS[target_key]
     print("="*64)
@@ -864,17 +866,18 @@ if __name__ == "__main__":
     headless = "--headless" in args
     record = "--record" in args
     show_cam = "--cam" in args
-    key = "apple"
+    key = "mario"
     speed = 1.0
+    obj_given = False
     for a in args:
         if a.startswith("--obj="):
-            key = a.split("=", 1)[1]
+            key = a.split("=", 1)[1]; obj_given = True
         elif a.startswith("--speed="):
             speed = float(a.split("=", 1)[1])
         elif a == "--fast":
             speed = 5.0
-    if not headless:
-        # 대화형: 프롬프트 입력
+    if not headless and not obj_given:
+        # 대화형: 프롬프트 입력 (--obj 미지정 시에만)
         try:
             txt = input("무엇을 잡아올까요? (예: '사과 잡아와') : ")
             k = parse_prompt(txt)

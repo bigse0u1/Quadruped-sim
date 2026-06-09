@@ -1,74 +1,88 @@
 <mujoco model="spot integrated task (map + traffic + grasp)">
   <!-- 친구(taekyeong)의 맵을 그대로 사용: scene_map.xml 을 직접 include.
-       (맵 구조가 바뀌면 자동 반영됨) 여기서는 파지용 물건 6개 + weld 만 추가. -->
+       파지용 실물(스캔) 사물 6개 + weld 만 추가.
+       사물 메쉬: kevinzakka/mujoco_scanned_objects (Google Scanned Objects).
+       texture file=  은 모델디렉토리(_integrated) 상대,
+       mesh file=     은 meshdir(robots/.../assets) 상대 경로. -->
   <include file="../_taekyeong/scene_map.xml"/>
 
   <asset>
-    <!-- 물건 색상 -->
-    <material name="m_apple"  rgba="0.90 0.12 0.12 1"/>
-    <material name="m_banana" rgba="0.95 0.85 0.10 1"/>
-    <material name="m_orange" rgba="0.95 0.55 0.10 1"/>
-    <material name="m_grape"  rgba="0.55 0.20 0.75 1"/>
-    <material name="m_lemon"  rgba="0.85 0.95 0.20 1"/>
-    <material name="m_tomato" rgba="0.85 0.10 0.05 1"/>
+    <!-- 6개 사물의 텍스처 / 재질 / 메쉬 (최대치수 ~0.13m 로 스케일) -->
+    <texture type="2d" name="mario_tex"    file="assets/mario/texture.png"/>
+    <material name="mario_mat"    texture="mario_tex"    specular="0.3" shininess="0.3"/>
+    <mesh name="mario_mesh"    file="../../../_integrated/assets/mario/model.obj"    scale="1.27 1.27 1.27"/>
+
+    <texture type="2d" name="yoshi_tex"    file="assets/yoshi/texture.png"/>
+    <material name="yoshi_mat"    texture="yoshi_tex"    specular="0.3" shininess="0.3"/>
+    <mesh name="yoshi_mesh"    file="../../../_integrated/assets/yoshi/model.obj"    scale="1.15 1.15 1.15"/>
+
+    <texture type="2d" name="android_tex"  file="assets/android/texture.png"/>
+    <material name="android_mat"  texture="android_tex"  specular="0.3" shininess="0.3"/>
+    <mesh name="android_mesh"  file="../../../_integrated/assets/android/model.obj"  scale="1.60 1.60 1.60"/>
+
+    <texture type="2d" name="dino_tex"     file="assets/dino/texture.png"/>
+    <material name="dino_mat"     texture="dino_tex"     specular="0.3" shininess="0.3"/>
+    <mesh name="dino_mesh"     file="../../../_integrated/assets/dino/model.obj"     scale="0.45 0.45 0.45"/>
+
+    <texture type="2d" name="elephant_tex" file="assets/elephant/texture.png"/>
+    <material name="elephant_mat" texture="elephant_tex" specular="0.3" shininess="0.3"/>
+    <mesh name="elephant_mesh" file="../../../_integrated/assets/elephant/model.obj" scale="0.48 0.48 0.48"/>
+
+    <texture type="2d" name="dog_tex"      file="assets/dog/texture.png"/>
+    <material name="dog_mat"      texture="dog_tex"      specular="0.3" shininess="0.3"/>
+    <mesh name="dog_mesh"      file="../../../_integrated/assets/dog/model.obj"      scale="0.56 0.56 0.56"/>
   </asset>
 
   <worldbody>
     <!-- =========================================================
-         물건 6개 (초록 플랫폼 가장자리, z=0.24 = 윗면 0.20 + 반치수 0.04)
-         이름이 프롬프트 매칭 키. free joint 로 파지·운반.
-         좌표는 main_task.py OBJECTS 와 일치시킬 것.
+         실물 사물 6개 (초록 플랫폼 가장자리, base z=0.20 = 플랫폼 윗면).
+         free joint 로 파지·운반. 이름이 프롬프트 매칭 키.
+         좌표는 main_task.py OBJECTS 와 일치.
          ========================================================= -->
-    <!-- green_01 (-22,23): 사과, 바나나 (남쪽 가장자리) -->
-    <body name="obj_apple" pos="-22.7 22.05 0.24">
-      <freejoint name="apple_free"/>
-      <inertial pos="0 0 0" mass="0.2" diaginertia="2e-4 2e-4 2e-4"/>
-      <geom name="apple_geom" type="box" size="0.04 0.04 0.04" material="m_apple"
-            friction="1.2 0.05 0.001" condim="6" priority="2" solimp="0.95 0.99 0.001"/>
+    <!-- green_01 (-22,23): 마리오, 요시 (남쪽 가장자리) -->
+    <body name="obj_mario" pos="-22.7 22.05 0.20">
+      <freejoint name="mario_free"/>
+      <geom name="mario_geom" type="mesh" mesh="mario_mesh" material="mario_mat"
+            mass="0.2" friction="1.2 0.05 0.001" condim="6" priority="2"/>
     </body>
-    <body name="obj_banana" pos="-21.3 22.05 0.24">
-      <freejoint name="banana_free"/>
-      <inertial pos="0 0 0" mass="0.2" diaginertia="2e-4 2e-4 2e-4"/>
-      <geom name="banana_geom" type="box" size="0.04 0.04 0.04" material="m_banana"
-            friction="1.2 0.05 0.001" condim="6" priority="2" solimp="0.95 0.99 0.001"/>
+    <body name="obj_yoshi" pos="-21.3 22.05 0.20">
+      <freejoint name="yoshi_free"/>
+      <geom name="yoshi_geom" type="mesh" mesh="yoshi_mesh" material="yoshi_mat"
+            mass="0.2" friction="1.2 0.05 0.001" condim="6" priority="2"/>
     </body>
 
-    <!-- green_02 (14,13): 오렌지, 포도 (서쪽 가장자리) -->
-    <body name="obj_orange" pos="13.05 12.3 0.24">
-      <freejoint name="orange_free"/>
-      <inertial pos="0 0 0" mass="0.2" diaginertia="2e-4 2e-4 2e-4"/>
-      <geom name="orange_geom" type="box" size="0.04 0.04 0.04" material="m_orange"
-            friction="1.2 0.05 0.001" condim="6" priority="2" solimp="0.95 0.99 0.001"/>
+    <!-- green_02 (14,13): 안드로이드, 공룡 (서쪽 가장자리) -->
+    <body name="obj_android" pos="13.05 12.3 0.20">
+      <freejoint name="android_free"/>
+      <geom name="android_geom" type="mesh" mesh="android_mesh" material="android_mat"
+            mass="0.2" friction="1.2 0.05 0.001" condim="6" priority="2"/>
     </body>
-    <body name="obj_grape" pos="13.05 13.7 0.24">
-      <freejoint name="grape_free"/>
-      <inertial pos="0 0 0" mass="0.2" diaginertia="2e-4 2e-4 2e-4"/>
-      <geom name="grape_geom" type="box" size="0.04 0.04 0.04" material="m_grape"
-            friction="1.2 0.05 0.001" condim="6" priority="2" solimp="0.95 0.99 0.001"/>
+    <body name="obj_dino" pos="13.05 13.7 0.20">
+      <freejoint name="dino_free"/>
+      <geom name="dino_geom" type="mesh" mesh="dino_mesh" material="dino_mat"
+            mass="0.2" friction="1.2 0.05 0.001" condim="6" priority="2"/>
     </body>
 
-    <!-- green_03 (-11,-2): 레몬, 토마토 (남쪽 가장자리) -->
-    <body name="obj_lemon" pos="-11.4 -3.95 0.24">
-      <freejoint name="lemon_free"/>
-      <inertial pos="0 0 0" mass="0.2" diaginertia="2e-4 2e-4 2e-4"/>
-      <geom name="lemon_geom" type="box" size="0.04 0.04 0.04" material="m_lemon"
-            friction="1.2 0.05 0.001" condim="6" priority="2" solimp="0.95 0.99 0.001"/>
+    <!-- green_03 (-11,-2): 코끼리, 강아지 (남쪽 가장자리) -->
+    <body name="obj_elephant" pos="-11.4 -3.95 0.20">
+      <freejoint name="elephant_free"/>
+      <geom name="elephant_geom" type="mesh" mesh="elephant_mesh" material="elephant_mat"
+            mass="0.2" friction="1.2 0.05 0.001" condim="6" priority="2"/>
     </body>
-    <body name="obj_tomato" pos="-10.6 -3.95 0.24">
-      <freejoint name="tomato_free"/>
-      <inertial pos="0 0 0" mass="0.2" diaginertia="2e-4 2e-4 2e-4"/>
-      <geom name="tomato_geom" type="box" size="0.04 0.04 0.04" material="m_tomato"
-            friction="1.2 0.05 0.001" condim="6" priority="2" solimp="0.95 0.99 0.001"/>
+    <body name="obj_dog" pos="-10.6 -3.95 0.20">
+      <freejoint name="dog_free"/>
+      <geom name="dog_geom" type="mesh" mesh="dog_mesh" material="dog_mat"
+            mass="0.2" friction="1.2 0.05 0.001" condim="6" priority="2"/>
     </body>
   </worldbody>
 
-  <!-- 파지용 weld: 그리퍼(arm_link_fngr)와 각 물건. 평소 비활성, 잡을 때 활성화 -->
+  <!-- 파지용 weld: 그리퍼(arm_link_fngr)와 각 사물. 평소 비활성, 잡을 때 활성화 -->
   <equality>
-    <weld name="grab_apple"  body1="arm_link_fngr" body2="obj_apple"  active="false" solref="0.02 1" solimp="0.9 0.95 0.001"/>
-    <weld name="grab_banana" body1="arm_link_fngr" body2="obj_banana" active="false" solref="0.02 1" solimp="0.9 0.95 0.001"/>
-    <weld name="grab_orange" body1="arm_link_fngr" body2="obj_orange" active="false" solref="0.02 1" solimp="0.9 0.95 0.001"/>
-    <weld name="grab_grape"  body1="arm_link_fngr" body2="obj_grape"  active="false" solref="0.02 1" solimp="0.9 0.95 0.001"/>
-    <weld name="grab_lemon"  body1="arm_link_fngr" body2="obj_lemon"  active="false" solref="0.02 1" solimp="0.9 0.95 0.001"/>
-    <weld name="grab_tomato" body1="arm_link_fngr" body2="obj_tomato" active="false" solref="0.02 1" solimp="0.9 0.95 0.001"/>
+    <weld name="grab_mario"    body1="arm_link_fngr" body2="obj_mario"    active="false" solref="0.02 1" solimp="0.9 0.95 0.001"/>
+    <weld name="grab_yoshi"    body1="arm_link_fngr" body2="obj_yoshi"    active="false" solref="0.02 1" solimp="0.9 0.95 0.001"/>
+    <weld name="grab_android"  body1="arm_link_fngr" body2="obj_android"  active="false" solref="0.02 1" solimp="0.9 0.95 0.001"/>
+    <weld name="grab_dino"     body1="arm_link_fngr" body2="obj_dino"     active="false" solref="0.02 1" solimp="0.9 0.95 0.001"/>
+    <weld name="grab_elephant" body1="arm_link_fngr" body2="obj_elephant" active="false" solref="0.02 1" solimp="0.9 0.95 0.001"/>
+    <weld name="grab_dog"      body1="arm_link_fngr" body2="obj_dog"      active="false" solref="0.02 1" solimp="0.9 0.95 0.001"/>
   </equality>
 </mujoco>

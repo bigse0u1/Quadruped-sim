@@ -8,14 +8,14 @@
 
 ```bash
 cd _integrated
-python main_task.py                 # 대화형: "사과 잡아와" 같이 입력
-python main_task.py --obj=apple     # 물건 직접 지정 (뷰어, 실시간)
-python main_task.py --obj=apple --speed=4   # 4배속 뷰어
-python main_task.py --obj=apple --fast      # 5배속 (= --speed=5)
-python main_task.py --obj=apple --cam       # 로봇 카메라 별창(body/arm/신호등) 함께 표시
-python main_task.py --obj=apple --speed=5 --cam   # 배속 + 카메라창
-python main_task.py --headless --obj=apple  # 뷰어 없이 최대 속도 + 결과 출력
-python main_task.py --record --obj=apple    # frames/ 에 프레임 저장
+python main_task.py                 # 대화형: "마리오 잡아와" 같이 입력
+python main_task.py --obj=mario     # 물건 직접 지정 (뷰어, 실시간)
+python main_task.py --obj=mario --speed=4   # 4배속 뷰어
+python main_task.py --obj=mario --fast      # 5배속 (= --speed=5)
+python main_task.py --obj=mario --cam       # 로봇 카메라 별창(body/arm/신호등) 함께 표시
+python main_task.py --obj=mario --speed=5 --cam   # 배속 + 카메라창
+python main_task.py --headless --obj=mario  # 뷰어 없이 최대 속도 + 결과 출력
+python main_task.py --record --obj=mario    # frames/ 에 프레임 저장
 ```
 
 `--cam`: body_cam / arm_cam / 신호등 비전 3개 패널을 별도 창(matplotlib)으로 실시간 표시.
@@ -24,18 +24,21 @@ python main_task.py --record --obj=apple    # frames/ 에 프레임 저장
 **배속**: `--speed=N` (뷰어 모드). 실시간이 느리면 2~6배속 권장.
 고배속에선 렌더 빈도를 자동으로 줄여 시뮬이 따라가게 함. `--headless` 는 sleep 없이 최대 속도.
 
-프롬프트 인식 이름(한/영): 사과/apple, 바나나/banana, 오렌지/orange,
-포도/grape, 레몬/lemon, 토마토/tomato.
+프롬프트 인식 이름(한/영): 마리오/mario, 요시/yoshi, 안드로이드(로봇)/android,
+공룡/dino, 코끼리/elephant, 강아지(개)/dog.
 
-## 물건 배치 (초록 구역당 2개)
+## 물건 배치 (초록 구역당 2개) — 실물 스캔 사물
+
+[Google Scanned Objects](https://github.com/kevinzakka/mujoco_scanned_objects) 메쉬 사용.
 
 | 물건 | 구역 | 위치 | 도로 횡단 |
 |------|------|------|-----------|
-| 사과·바나나 | green_01 (북서) | (-22.7,22.05), (-21.3,22.05) | O |
-| 오렌지·포도 | green_02 (동)   | (13.05,12.3), (13.05,13.7)  | O |
-| 레몬·토마토 | green_03 (남)   | (-11.4,-3.9), (-10.6,-3.9)  | X |
+| 마리오·요시 | green_01 (북서) | (-22.7,22.05), (-21.3,22.05) | O |
+| 안드로이드·공룡 | green_02 (동)   | (13.05,12.3), (13.05,13.7)  | O |
+| 코끼리·강아지 | green_03 (남)   | (-11.4,-3.95), (-10.6,-3.95) | X |
 
-물건은 초록 플랫폼(윗면 z=0.20) 가장자리에 z=0.24 로 놓여 팔이 닿는 높이.
+사물은 초록 플랫폼(윗면 z=0.20) 가장자리에 base z=0.20 로 놓여 팔이 닿는 높이.
+메쉬/텍스처는 `assets/<이름>/` 에 있고, 최대치수 ~0.13m 로 스케일.
 
 ## 구성 요소
 
